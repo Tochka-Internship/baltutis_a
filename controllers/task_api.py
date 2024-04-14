@@ -15,11 +15,14 @@ router = APIRouter(
 
 @router.get("/getTaskInfo")
 async def get_task_info(id: uuid.UUID, session: AsyncSession = Depends(get_async_session)):
+
     query = select(task).where(task.c.id == id)
     result = await session.execute(query)
     result_info = result.mappings().all()
+
     if len(result_info) == 0:
         raise HTTPException(status_code=404, detail="ID not found")
+
     response_data = {
         "id": str(result_info[0].id),
         "status": str(result_info[0].status),
@@ -28,20 +31,26 @@ async def get_task_info(id: uuid.UUID, session: AsyncSession = Depends(get_async
         "task_target": {"stock": str(result_info[0].stock), "id": str(result_info[0].item_id)},
         "posting_id": str(result_info[0].posting_id)
     }
+
     return response_data
 
 
 @router.post("/finishTask")
 async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async_session)):
+
     query = select(task).where(task.c.id == id.id, task.c.status == "in_work")
     result = await session.execute(query)
     result_info = result.mappings().all()
+
     if len(result_info) == 0:
         raise HTTPException(status_code=404, detail="id not found or already completed or canceled")
+
     query_item_id = select(stock_table).where(stock_table.c.id == result_info[0].item_id)
     result = await session.execute(query_item_id)
     result_item_info = result.mappings().all()
+
     check_new_task_create: bool = False
+
     if id.status == "completed" and result_info[0].type == "placing":
         if len(result_item_info) == 0:
             query_sku = select(sku).where(sku.c.id == result_info[0].sku_id)
@@ -76,15 +85,18 @@ async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async
             await session.execute(update_reserved)
         update_stmt = task.update().values(status="completed").where(task.c.id == id.id)
         await session.execute(update_stmt)
+
     if id.status == "canceled" and result_info[0].type == "placing":
         update_stmt = task.update().values(status="canceled").where(task.c.id == id.id)
         await session.execute(update_stmt)
+
     if id.status == "canceled" and result_info[0].type == "picking":
         update_reserved = stock_table.update().values(reserved_state=False)\
             .where(stock_table.c.id == result_item_info[0].id)
         await session.execute(update_reserved)
         update_stmt = task.update().values(status="canceled").where(task.c.id == id.id)
         await session.execute(update_stmt)
+
     if id.status == "completed" and result_info[0].type == "picking":
         if random.random() < 0.1:
             update_price = stock_table.update()\
@@ -114,6 +126,7 @@ async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async
                     result_info[0].posting_id])
                 await session.execute(stmt_new_task)
             check_new_task_create = True
+
     if check_new_task_create is True:
         status_result = "canceled"
     else:
@@ -121,22 +134,27 @@ async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async
     update_stmt = task.update().values(status=status_result).where(task.c.id == id.id)
     await session.execute(update_stmt)
     await session.commit()
+
     query_posting_check = select(task).where(task.c.posting_id == result_info[0].posting_id,
                                              task.c.status == "in_work")
     result = await session.execute(query_posting_check)
     result_posting_check = result.mappings().all()
+
     query_posting_finish = select(task).where(task.c.posting_id == result_info[0].posting_id,
                                               task.c.status == "completed")
     result = await session.execute(query_posting_finish)
     result_posting_finish = result.mappings().all()
+
     if len(result_posting_check) == 0 and len(result_posting_finish) != 0:
         update_stmt = posting.update().values(status="sent").where(posting.c.id == result_info[0].posting_id)
         await session.execute(update_stmt)
         await session.commit()
+
     if len(result_posting_check) == 0 and len(result_posting_finish) == 0:
         update_stmt = posting.update().values(status="canceled").where(posting.c.id == result_info[0].posting_id)
         await session.execute(update_stmt)
         await session.commit()
+
     return {"id": id.id, "status": status_result}
 
 

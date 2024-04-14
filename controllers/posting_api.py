@@ -33,7 +33,9 @@ async def get_posting(id: uuid.UUID, session: AsyncSession = Depends(get_async_s
     query_stock = select(task).where(task.c.posting_id == id)
     result = await session.execute(query_stock)
     stock_list = result.mappings().all()
+
     ordered_goods = {}
+
     for item in stock_list:
         if item.sku_id not in ordered_goods:
             ordered_goods[item.sku_id] = {"sku": item.sku_id, "from_valid_ids": [], "from_defect_ids": []}
@@ -52,6 +54,7 @@ async def get_posting(id: uuid.UUID, session: AsyncSession = Depends(get_async_s
     query_task = select(task.c.id, task.c.type, task.c.status).where(task.c.posting_id == id)
     result = await session.execute(query_task)
     task_list = result.mappings().all()
+
     response_data = {
         "id": str(posting_list[0].id),
         "status": str(posting_list[0].status),
@@ -61,17 +64,21 @@ async def get_posting(id: uuid.UUID, session: AsyncSession = Depends(get_async_s
         "not_found": list(notfound),
         "task_ids": list(task_list)
     }
+
     return response_data
 
 
 @router.post("/createPosting")
 async def create_posting(order_request: PostingRequest, session: AsyncSession = Depends(get_async_session)):
+
     sku_ids = [item.sku for item in order_request.ordered_goods]
     query_check = select(sku.c.id).where(sku.c.id.in_(sku_ids), sku.c.is_hidden.is_(False))
     result = await session.execute(query_check)
     sku_ids_list = result.mappings().all()
+
     if len(sku_ids_list) != len(sku_ids):
         raise HTTPException(status_code=404, detail="Some sku not found or sku is hidden")
+
     for i in range(len(sku_ids)):
         if not order_request.ordered_goods[i].from_valid_ids is None:
             valid_list = order_request.ordered_goods[i].from_valid_ids
@@ -91,7 +98,9 @@ async def create_posting(order_request: PostingRequest, session: AsyncSession = 
             defect_item_check = result.mappings().all()
             if len(defect_item_check) != len(defect_list):
                 raise HTTPException(status_code=404, detail="Some item not found or reserved or placed in another stock")
+
     new_posting_id = uuid.uuid4()
+
     for i in range(len(sku_ids)):
         if not order_request.ordered_goods[i].from_valid_ids is None:
             valid_list = order_request.ordered_goods[i].from_valid_ids
@@ -123,9 +132,11 @@ async def create_posting(order_request: PostingRequest, session: AsyncSession = 
                 update_reserved_defect = stock_table.update().values(reserved_state=True) \
                     .where(stock_table.c.id == defect_list[c])
                 await session.execute(update_reserved_defect)
+
     stmt_posting = insert(posting).values([new_posting_id, "in_item_pick", datetime.utcnow()])
     await session.execute(stmt_posting)
     await session.commit()
+
     return {"id": new_posting_id}
 
 
