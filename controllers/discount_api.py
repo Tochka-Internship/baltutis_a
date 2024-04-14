@@ -25,6 +25,7 @@ async def get_discount(id: uuid.UUID, session: AsyncSession = Depends(get_async_
 
     if len(result_info) == 0:
         raise HTTPException(status_code=404, detail="ID not found")
+
     return result_info, {"sku_ids": list(result_sku_info)}
 
 

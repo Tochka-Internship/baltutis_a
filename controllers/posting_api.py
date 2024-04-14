@@ -142,17 +142,22 @@ async def create_posting(order_request: PostingRequest, session: AsyncSession = 
 
 @router.post("/cancelPosting")
 async def cancel_posting(id: RequestId, session: AsyncSession = Depends(get_async_session)):
+
     query_check = select(posting).where(posting.c.id == id.id, posting.c.status == "in_item_pick")
     result = await session.execute(query_check)
     result_info = result.mappings().all()
+
     if len(result_info) == 0:
         raise HTTPException(status_code=404, detail="ID not found or already canceled or sent")
+
     update_stmt = task.update().values(status="canceled").where(task.c.posting_id == id.id)
     await session.execute(update_stmt)
     await session.commit()
+
     query_task = select(task).where(task.c.posting_id == id.id)
     result = await session.execute(query_task)
     result_task_info = result.mappings().all()
+
     for c in range(len(result_task_info)):
         stmt_new_task = insert(task).values([
             uuid.uuid4(),
@@ -163,8 +168,10 @@ async def cancel_posting(id: RequestId, session: AsyncSession = Depends(get_asyn
             result_task_info[c].item_id,
             id.id])
         await session.execute(stmt_new_task)
+
     update_posting = posting.update().values(status="canceled").where(posting.c.id == id.id)
     await session.execute(update_posting)
     await session.commit()
+
     return {"id": id.id}
 
