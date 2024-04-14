@@ -43,7 +43,7 @@ async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async
     result_item_info = result.mappings().all()
     check_new_task_create: bool = False
     if id.status == "completed" and result_info[0].type == "placing":
-        if len(result_item_info[0]) == 0:
+        if len(result_item_info) == 0:
             query_sku = select(sku).where(sku.c.id == result_info[0].sku_id)
             result_sku = await session.execute(query_sku)
             result_sku_check = result_sku.mappings().all()
@@ -68,13 +68,13 @@ async def finish_task(id: RequestTask, session: AsyncSession = Depends(get_async
                 False,
                 0.00])
             await session.execute(stmt_stock)
-            update_stmt = task.update().values(status="completed").where(task.c.id == id)
+            update_stmt = task.update().values(status="completed").where(task.c.id == id.id)
             await session.execute(update_stmt)
         else:
             update_reserved = stock_table.update().values(reserved_state=False)\
                 .where(stock_table.c.id == result_item_info[0].id)
             await session.execute(update_reserved)
-        update_stmt = task.update().values(status="completed").where(task.c.id == id)
+        update_stmt = task.update().values(status="completed").where(task.c.id == id.id)
         await session.execute(update_stmt)
     if id.status == "canceled" and result_info[0].type == "placing":
         update_stmt = task.update().values(status="canceled").where(task.c.id == id.id)
